@@ -173,15 +173,7 @@ func launch(ctx context.Context, instanceName string) error {
 	if err != nil {
 		return err
 	}
-	inv, err := client.FetchInventory(ctx)
-	if err != nil {
-		return err
-	}
-	running, degraded, stopped := inv.Counts()
-	fmt.Printf("%s: %d servers, %d applications (%d running, %d degraded, %d stopped)\n",
-		inst.Name, len(inv.Servers), len(inv.Apps), running, degraded, stopped)
-	fmt.Println("The dashboard UI lands in phase 3; run `coolify-tui doctor` meanwhile.")
-	return nil
+	return ui.Run(cfg, inst, client, styles(cfg))
 }
 
 // listInstances prints the configured instances without revealing tokens.

@@ -144,6 +144,26 @@ prod (https://coolify.example.com)
   ✓ read (deployments): 1 queued/running
 ```
 
+## Keys
+
+| Key | Action |
+| --- | --- |
+| `↑`/`k`, `↓`/`j` | move the selection |
+| `tab` | switch between sidebar and detail pane |
+| `←`/`h`, `→`/`l` | focus sidebar / detail pane |
+| `enter` | fold a server, or open an application's detail pane |
+| `space` | fold or unfold the server you're on |
+| `1`–`4`, `[`/`]` | switch detail tabs |
+| `/` | filter applications by name, domain or branch |
+| `o` | open the selected application's domain in a browser |
+| `ctrl+r` | refresh now |
+| `?` | full keybinding reference and refresh warnings |
+| `q` | quit |
+
+Status glyphs: `●` running · `◍` degraded (up but failing its health check) ·
+`○` stopped · `▶` deploying. Degraded is deliberately distinct from both running
+and stopped — it's the state worth acting on.
+
 ## Security
 
 - The config file is written `0600` in a `0700` directory, atomically.
@@ -161,7 +181,7 @@ prod (https://coolify.example.com)
 
 - [x] **Phase 1** — API client, config, `doctor`
 - [x] **Phase 2** — onboarding wizard
-- [ ] **Phase 3** — dashboard shell
+- [x] **Phase 3** — dashboard shell
 - [ ] **Phase 4** — deploy and lifecycle actions
 - [ ] **Phase 5** — deployment history and live build logs
 - [ ] **Phase 6** — container logs, environment variables, server health
