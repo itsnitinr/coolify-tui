@@ -605,3 +605,6 @@ func TestServerDetailsExplainsSyntheticRow(t *testing.T) {
 		t.Error("the synthetic row must not be described as unreachable")
 	}
 }
+
+// lipglossWidth exposes the cell-width helper to tests in this package.
+func lipglossWidth(s string) int { return lipgloss.Width(s) }

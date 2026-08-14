@@ -159,7 +159,10 @@ prod (https://coolify.example.com)
 | `s`, `x`, `r` | start, stop, restart |
 | `c` | cancel the running build |
 | `enter` (Deployments tab) | open a build log |
-| `f` | follow / unfollow a running build log |
+| `f` | follow / unfollow a live log |
+| `t` | toggle log timestamps |
+| `v` | reveal the selected env var's value |
+| `V` | reveal every env var value |
 | `/` | filter applications by name, domain or branch |
 | `o` | open the selected application's domain in a browser |
 | `ctrl+r` | refresh now |
@@ -203,6 +206,23 @@ output doesn't yank you back to the tail; `G` returns to the bottom and resumes.
 Build steps render as `$ command` so a long log stays skimmable, and stderr is
 coloured. Entries Coolify marks hidden are never rendered.
 
+## Logs and environment variables
+
+`2` tails a running application's container logs, polled every three seconds and
+followed by default. `t` toggles timestamps. Output is hard-wrapped rather than
+re-flowed, so column-aligned log lines keep their alignment. Polling stops the
+moment you leave the tab.
+
+`4` lists environment variables, **masked by default** — you see the name, a dot
+mask and the value's length, which is enough to spot an empty or truncated
+value without putting a secret on screen. `v` reveals just the selected one; `V`
+reveals all and shows a warning while it's on, because that's the risky mode.
+Reveals never carry over when you move to another application. Values are
+read-only here; edit them in Coolify.
+
+Both tabs need the `read:sensitive` token permission. Without it they say so and
+name the permission — the rest of the dashboard keeps working.
+
 ## Security
 
 - The config file is written `0600` in a `0700` directory, atomically.
@@ -223,7 +243,7 @@ coloured. Entries Coolify marks hidden are never rendered.
 - [x] **Phase 3** — dashboard shell
 - [x] **Phase 4** — deploy and lifecycle actions
 - [x] **Phase 5** — deployment history and live build logs
-- [ ] **Phase 6** — container logs, environment variables, server health
+- [x] **Phase 6** — container logs, environment variables, server health
 - [ ] **Phase 7** — search, help overlay, release tooling
 
 ## Development

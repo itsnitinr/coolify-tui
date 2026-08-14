@@ -555,7 +555,7 @@ func drainCmdNonBlocking(t *testing.T, cmd tea.Cmd) {
 				}
 			}
 		}
-	case <-time.After(3 * time.Second):
+	case <-time.After(cmdTimeout):
 		// A tick or other long-lived command; not what we are asserting on.
 	}
 }

@@ -108,6 +108,11 @@ func applyCmd(t *testing.T, m Dashboard, cmd tea.Cmd) Dashboard {
 	return m
 }
 
+// cmdTimeout bounds how long a test waits for a command. Requests go to a local
+// httptest server and return in microseconds, so anything slower than this is a
+// timer tick the test is not interested in.
+const cmdTimeout = 400 * time.Millisecond
+
 // runCmd executes a command with a timeout, returning nil for one that blocks
 // (a timer tick).
 func runCmd(t *testing.T, cmd tea.Cmd) tea.Msg {
@@ -120,7 +125,7 @@ func runCmd(t *testing.T, cmd tea.Cmd) tea.Msg {
 	select {
 	case msg := <-done:
 		return msg
-	case <-time.After(2 * time.Second):
+	case <-time.After(cmdTimeout):
 		return nil
 	}
 }
@@ -147,7 +152,7 @@ func peekCmd(cmd tea.Cmd) tea.Msg {
 			return nil
 		}
 		return msg
-	case <-time.After(2 * time.Second):
+	case <-time.After(cmdTimeout):
 		return nil
 	}
 }

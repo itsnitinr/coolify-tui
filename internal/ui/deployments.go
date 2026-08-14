@@ -464,7 +464,7 @@ func (m Dashboard) renderLogLine(line coolify.LogLine, width int) string {
 	// A command entry is the build step being run; showing it as a shell prompt
 	// makes the log skimmable.
 	if line.Command != "" {
-		return indent(s.Accent.Render(wrap("$ "+line.Command, avail)), "  ")
+		return indent(s.Accent.Render(hardWrap("$ "+line.Command, avail)), "  ")
 	}
 
 	text := strings.TrimRight(line.Output, "\r\n")
@@ -475,7 +475,9 @@ func (m Dashboard) renderLogLine(line coolify.LogLine, width int) string {
 	if line.Stderr() {
 		style = s.Danger
 	}
-	return indent(style.Render(wrap(text, avail)), "  ")
+	// hardWrap preserves build output's own alignment, which docker and npm rely
+	// on for their progress and table output.
+	return indent(style.Render(hardWrap(text, avail)), "  ")
 }
 
 // displayDeploymentStatus shortens Coolify's longest status names so the history

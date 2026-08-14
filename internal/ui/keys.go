@@ -39,7 +39,9 @@ type KeyMap struct {
 	Cancel      key.Binding
 	Refresh     key.Binding
 	Follow      key.Binding
+	Timestamps  key.Binding
 	Reveal      key.Binding
+	RevealAll   key.Binding
 	OpenBrowser key.Binding
 
 	// Global
@@ -166,9 +168,17 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("f"),
 			key.WithHelp("f", "follow"),
 		),
+		Timestamps: key.NewBinding(
+			key.WithKeys("t"),
+			key.WithHelp("t", "timestamps"),
+		),
 		Reveal: key.NewBinding(
 			key.WithKeys("v"),
-			key.WithHelp("v", "reveal values"),
+			key.WithHelp("v", "reveal value"),
+		),
+		RevealAll: key.NewBinding(
+			key.WithKeys("V"),
+			key.WithHelp("V", "reveal all values"),
 		),
 		OpenBrowser: key.NewBinding(
 			key.WithKeys("o"),
@@ -222,7 +232,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		{k.NextPane, k.PrevPane, k.FocusSidebar, k.FocusMain, k.Select, k.Collapse},
 		{k.TabDetails, k.TabLogs, k.TabDeployments, k.TabEnv, k.PrevTab, k.NextTab},
 		{k.Deploy, k.ForceDeploy, k.Start, k.Stop, k.Restart, k.Cancel},
-		{k.Follow, k.Reveal, k.OpenBrowser, k.Refresh, k.Filter, k.Instances},
-		{k.Help, k.Escape, k.Quit},
+		{k.Follow, k.Timestamps, k.Reveal, k.RevealAll, k.OpenBrowser, k.Refresh},
+		{k.Filter, k.Instances, k.Help, k.Escape, k.Quit},
 	}
 }

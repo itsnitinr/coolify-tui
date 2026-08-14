@@ -199,6 +199,15 @@ func (m Dashboard) renderServerDetails(srv coolify.Server, width int) string {
 		d.styledField("failed checks", fmt.Sprintf("%d", srv.UnreachableCount), s.Warning)
 	}
 
+	// Coolify does not expose disk usage through the v1 API, only whether it has
+	// already alerted on it. That flag is still the useful signal.
+	if srv.HighDiskUsageNotificationSent {
+		d.styledField("disk", "high usage — Coolify has sent a disk alert for this server", s.Warning)
+	}
+	if srv.UnreachableNotificationSent {
+		d.styledField("alerts", "an unreachable-server notification has been sent", s.Warning)
+	}
+
 	d.section("Configuration")
 	d.styledField("reachable", yesNo(srv.Settings.IsReachable),
 		boolStyle(s, srv.Settings.IsReachable))
@@ -305,6 +314,43 @@ func yesNo(b bool) string {
 		return "yes"
 	}
 	return "no"
+}
+
+// hardWrap breaks text at exactly width display cells without re-flowing it.
+//
+// Unlike wrap, it preserves runs of whitespace, which matters for log output:
+// re-flowing on word boundaries collapses the padding that aligns columns, so
+// "GET /path        200  4ms" would come out as "GET /path 200 4ms".
+func hardWrap(text string, width int) string {
+	if width <= 0 {
+		return text
+	}
+
+	var out []string
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if lipgloss.Width(line) <= width {
+			out = append(out, line)
+			continue
+		}
+
+		var current strings.Builder
+		currentWidth := 0
+		for _, r := range line {
+			runeWidth := lipgloss.Width(string(r))
+			if currentWidth+runeWidth > width {
+				out = append(out, current.String())
+				current.Reset()
+				currentWidth = 0
+			}
+			current.WriteRune(r)
+			currentWidth += runeWidth
+		}
+		if current.Len() > 0 {
+			out = append(out, current.String())
+		}
+	}
+	return strings.Join(out, "\n")
 }
 
 // formatDuration renders a duration compactly: 45s, 3m12s, 1h04m.

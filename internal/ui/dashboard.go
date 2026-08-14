@@ -107,8 +107,11 @@ type Dashboard struct {
 	filtering   bool
 	filterInput textinput.Model
 
-	// deployments is the Deployments tab's state: history list and log viewer.
+	// Per-tab state. Each is scoped to one application and invalidated when the
+	// selection moves.
 	deployments deploymentsState
+	logs        logsState
+	envs        envsState
 
 	// pending holds an action awaiting confirmation; nil when no modal is open.
 	pending *pendingAction
@@ -236,7 +239,7 @@ func (m Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case spinner.TickMsg:
-		if !m.loading && !m.anyInFlight() && !m.deployments.detailBusy && m.deployments.polling == "" {
+		if !m.spinnerNeeded() {
 			return m, nil
 		}
 		var cmd tea.Cmd
@@ -270,6 +273,15 @@ func (m Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case deploymentPollMsg:
 		return m.handleDeploymentPoll(msg)
+
+	case logsMsg:
+		return m.handleLogsMsg(msg)
+
+	case logPollMsg:
+		return m.handleLogPoll(msg)
+
+	case envsMsg:
+		return m.handleEnvsMsg(msg)
 
 	case refreshSoonMsg:
 		// A follow-up refresh after an action, once Coolify has had time to
@@ -355,11 +367,20 @@ func (m Dashboard) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Refresh):
-		if m.loading {
-			return m, nil
+		// Refresh the inventory and whatever the active tab is showing, so one
+		// key means "update everything I can see".
+		cmds := []tea.Cmd{m.spin.Tick}
+		if !m.loading {
+			m.loading = true
+			cmds = append(cmds, m.fetchInventory())
 		}
-		m.loading = true
-		return m, tea.Batch(m.fetchInventory(), m.spin.Tick)
+		m.invalidateActiveTab()
+		model, cmd := m.refreshActiveTab()
+		m = model.(Dashboard)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Batch(cmds...)
 
 	case key.Matches(msg, m.keys.Filter):
 		m.filtering = true
@@ -473,8 +494,21 @@ func (m Dashboard) handleSidebarKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // handleMainKey routes keys inside the detail pane. Tabs with their own
 // navigation get first refusal; anything they do not claim scrolls the pane.
 func (m Dashboard) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.tab == tabDeployments {
+	switch m.tab {
+	case tabDeployments:
 		model, cmd, claimed := m.handleDeploymentsKey(msg)
+		if claimed {
+			return model, cmd
+		}
+		m = model.(Dashboard)
+	case tabLogs:
+		model, cmd, claimed := m.handleLogsKey(msg)
+		if claimed {
+			return model, cmd
+		}
+		m = model.(Dashboard)
+	case tabEnv:
+		model, cmd, claimed := m.handleEnvsKey(msg)
 		if claimed {
 			return model, cmd
 		}
@@ -501,10 +535,10 @@ func (m Dashboard) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Dashboard) activateTab(t tab) (tea.Model, tea.Cmd) {
 	m.tab = t
 
-	// Tabs with their own cursor need focus to be usable; leaving focus in the
-	// sidebar would make their keys silently do nothing. Details is read-only, so
-	// it leaves focus where it was.
-	if t == tabDeployments {
+	// Tabs with their own cursor or hotkeys need focus to be usable; leaving
+	// focus in the sidebar would make their keys silently do nothing. Details is
+	// purely read-only, so it leaves focus where it was.
+	if t != tabDetails {
 		if _, ok := m.tree.selectedApp(); ok {
 			m.focus = paneMain
 		}
@@ -516,11 +550,40 @@ func (m Dashboard) activateTab(t tab) (tea.Model, tea.Cmd) {
 // tab needs for the current selection.
 func (m Dashboard) refreshActiveTab() (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	if m.tab == tabDeployments {
+	switch m.tab {
+	case tabDeployments:
 		cmd = m.ensureDeployments()
+	case tabLogs:
+		cmd = m.ensureLogs()
+	case tabEnv:
+		cmd = m.ensureEnvs()
 	}
 	m.syncMain()
 	return m, cmd
+}
+
+// invalidateActiveTab clears the active tab's cached data so refreshActiveTab
+// fetches it again. Display preferences are kept.
+func (m *Dashboard) invalidateActiveTab() {
+	switch m.tab {
+	case tabDeployments:
+		m.deployments.appUUID = ""
+	case tabLogs:
+		m.logs = logsState{timestamps: m.logs.timestamps}
+	case tabEnv:
+		m.envs.appUUID = ""
+	}
+}
+
+// spinnerNeeded reports whether anything on screen is animating, so the spinner
+// stops ticking when the dashboard is idle.
+func (m Dashboard) spinnerNeeded() bool {
+	return m.loading ||
+		m.anyInFlight() ||
+		m.deployments.detailBusy ||
+		m.deployments.polling != "" ||
+		m.logs.loading ||
+		m.envs.loading
 }
 
 // matches is a shorthand for key.Matches against a single binding.
@@ -645,17 +708,18 @@ func (m *Dashboard) syncMain() {
 	case m.tab == tabDeployments:
 		content = m.renderDeploymentsList(row.app, width)
 	case m.tab == tabLogs:
-		content = m.renderPlaceholder("Container logs",
-			"Live log streaming arrives in phase 6.")
+		content = m.renderLogs(row.app, width)
 	case m.tab == tabEnv:
-		content = m.renderPlaceholder("Environment variables",
-			"The masked env-var viewer arrives in phase 6.")
+		content = m.renderEnvs(row.app, width)
 	}
 
 	m.main.SetContent(content)
 	// Follow mode pins the view to the newest output; otherwise the scroll
 	// position is left where the user put it.
-	if m.tab == tabDeployments && m.deployments.showingLogs() && m.deployments.follow {
+	switch {
+	case m.tab == tabDeployments && m.deployments.showingLogs() && m.deployments.follow:
+		m.main.GotoBottom()
+	case m.tab == tabLogs && m.logs.follow:
 		m.main.GotoBottom()
 	}
 }
