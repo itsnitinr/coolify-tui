@@ -227,6 +227,37 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	return nil
 }
 
+// doRaw performs a request and returns the undecoded JSON body, for endpoints
+// whose response shape varies and needs inspecting before decoding.
+func (c *Client) doRaw(ctx context.Context, method, path string, query url.Values) ([]byte, error) {
+	endpoint := c.baseURL.String() + path
+	if len(query) > 0 {
+		endpoint += "?" + query.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("coolify: build request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", c.userAgent)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("coolify: %s %s: %w", method, path, unwrapURLError(err))
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, c.apiError(resp, method, path)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
+	if err != nil {
+		return nil, fmt.Errorf("coolify: read %s %s response: %w", method, path, err)
+	}
+	return body, nil
+}
+
 // doText performs a request and returns the raw body as a string, for the
 // endpoints that answer text/plain rather than JSON.
 func (c *Client) doText(ctx context.Context, method, path string) (string, error) {
@@ -480,16 +511,23 @@ func (c *Client) Deploy(ctx context.Context, uuids []string, force bool) ([]Acti
 
 // Deployments lists currently queued and running deployments across the
 // instance.
+//
+// The handler sorts with a Laravel Collection, which preserves array keys, so
+// this can come back as a key-indexed object instead of an array once the sort
+// reorders anything. decodeCollection normalises both.
 func (c *Client) Deployments(ctx context.Context) ([]Deployment, error) {
-	var deployments []Deployment
-	if err := c.do(ctx, http.MethodGet, "/deployments", nil, &deployments); err != nil {
+	body, err := c.doRaw(ctx, http.MethodGet, "/deployments", nil)
+	if err != nil {
 		return nil, err
 	}
-	return deployments, nil
+	return decodeCollection[Deployment](body, "deployments")
 }
 
 // ApplicationDeployments lists an application's deployment history, newest
 // first. take caps the number of records; pass 0 for the API default.
+//
+// This endpoint returns a paginated envelope, {"count": N, "deployments": [...]},
+// even though Coolify's OpenAPI spec documents a bare array.
 func (c *Client) ApplicationDeployments(ctx context.Context, uuid string, skip, take int) ([]Deployment, error) {
 	query := url.Values{}
 	if skip > 0 {
@@ -498,12 +536,12 @@ func (c *Client) ApplicationDeployments(ctx context.Context, uuid string, skip, 
 	if take > 0 {
 		query.Set("take", strconv.Itoa(take))
 	}
-	var deployments []Deployment
 	path := "/deployments/applications/" + url.PathEscape(uuid)
-	if err := c.do(ctx, http.MethodGet, path, query, &deployments); err != nil {
+	body, err := c.doRaw(ctx, http.MethodGet, path, query)
+	if err != nil {
 		return nil, err
 	}
-	return deployments, nil
+	return decodeCollection[Deployment](body, "deployments")
 }
 
 // Deployment fetches a single deployment, including its build logs.
