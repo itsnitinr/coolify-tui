@@ -278,8 +278,9 @@ func (t *treeModel) setFilter(filter string, inv coolify.Inventory) {
 	t.rebuild(inv)
 }
 
-// view renders the sidebar rows.
-func (t treeModel) view(s Styles, focused bool) string {
+// view renders the sidebar rows. inFlight marks applications with an action
+// running against them, keyed by UUID.
+func (t treeModel) view(s Styles, focused bool, inFlight map[string]actionKind) string {
 	if len(t.rows) == 0 {
 		msg := "No applications found."
 		if t.filter != "" {
@@ -299,13 +300,18 @@ func (t treeModel) view(s Styles, focused bool) string {
 
 	lines := make([]string, 0, end-start)
 	for i := start; i < end; i++ {
-		lines = append(lines, t.renderRow(s, t.rows[i], i == t.cursor, focused))
+		row := t.rows[i]
+		busy := false
+		if row.kind == rowApp {
+			_, busy = inFlight[row.app.UUID]
+		}
+		lines = append(lines, t.renderRow(s, row, i == t.cursor, focused, busy))
 	}
 	return strings.Join(lines, "\n")
 }
 
 // renderRow draws one row, truncating to the sidebar width.
-func (t treeModel) renderRow(s Styles, row treeRow, isCursor, focused bool) string {
+func (t treeModel) renderRow(s Styles, row treeRow, isCursor, focused, busy bool) string {
 	// The cursor bar spans the full width, so the highlight reads as a
 	// selection rather than as coloured text.
 	width := t.width
@@ -357,19 +363,31 @@ func (t treeModel) renderRow(s Styles, row treeRow, isCursor, focused bool) stri
 		}
 
 	case rowApp:
-		glyph := plainStatusGlyph(row.app.Status)
-		if row.deploying {
-			glyph = "▶"
+		// An action we just fired outranks the polled status, which is up to a
+		// refresh interval stale.
+		glyphChar := plainStatusGlyph(row.app.Status)
+		glyphStyle := lipgloss.Style{}
+		switch {
+		case busy:
+			glyphChar, glyphStyle = "◌", s.Accent
+		case row.deploying:
+			glyphChar, glyphStyle = "▶", s.Info
 		}
+
+		glyph := glyphChar
 		if !plain {
-			glyph = s.StatusDot(row.app.Status)
-			if row.deploying {
-				glyph = s.Info.Render("▶")
+			if busy || row.deploying {
+				glyph = glyphStyle.Render(glyphChar)
+			} else {
+				glyph = s.StatusDot(row.app.Status)
 			}
 		}
 		prefix = "   " + glyph + " "
 		label = row.app.Name
 		right = row.app.GitBranch
+		if busy {
+			right = ""
+		}
 	}
 
 	line := composeRow(prefix, label, right, width, s, plain)

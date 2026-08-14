@@ -79,6 +79,12 @@ func (m Dashboard) renderAppDetails(app coolify.Application, width int) string {
 	d.blank()
 	d.raw("  " + s.StatusIndicator(app.Status))
 
+	// An action we just fired is newer than the polled status, so say so rather
+	// than letting the pane look unresponsive for up to a refresh interval.
+	if kind, busy := m.inFlight[app.UUID]; busy {
+		d.raw("  " + m.spin.View() + s.Accent.Render(" "+kind.gerund()+"…"))
+	}
+
 	// An in-flight deployment is the most time-sensitive thing on this pane, so
 	// it goes directly under the status.
 	if dep, ok := m.inv.DeploymentForApp(app.Name); ok {

@@ -82,16 +82,22 @@ func TestDashboardViewFillsExactlyTheTerminal(t *testing.T) {
 	}
 	for _, size := range sizes {
 		m := newTestDashboard(t, size.w, size.h)
-		view := m.View()
+		assertFitsTerminal(t, m.View(), size.w, size.h)
+	}
+}
 
-		if got := lipgloss.Height(view); got != size.h {
-			t.Errorf("%dx%d: view is %d lines tall, want %d", size.w, size.h, got, size.h)
-		}
-		for i, line := range strings.Split(view, "\n") {
-			if got := lipgloss.Width(line); got > size.w {
-				t.Errorf("%dx%d: line %d is %d cells wide, want <= %d:\n%q",
-					size.w, size.h, i, got, size.w, line)
-			}
+// assertFitsTerminal checks that a rendered screen is exactly height lines and
+// that no line exceeds width display cells. Either violation makes the terminal
+// scroll, which tears the layout.
+func assertFitsTerminal(t *testing.T, view string, width, height int) {
+	t.Helper()
+	if got := lipgloss.Height(view); got != height {
+		t.Errorf("%dx%d: view is %d lines tall, want %d", width, height, got, height)
+	}
+	for i, line := range strings.Split(view, "\n") {
+		if got := lipgloss.Width(line); got > width {
+			t.Errorf("%dx%d: line %d is %d cells wide, want <= %d:\n%q",
+				width, height, i, got, width, line)
 		}
 	}
 }

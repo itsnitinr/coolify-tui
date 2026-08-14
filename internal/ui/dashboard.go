@@ -107,6 +107,12 @@ type Dashboard struct {
 	filtering   bool
 	filterInput textinput.Model
 
+	// pending holds an action awaiting confirmation; nil when no modal is open.
+	pending *pendingAction
+	// inFlight maps an application UUID to the action running against it, so
+	// repeated keypresses cannot queue duplicate calls.
+	inFlight map[string]actionKind
+
 	showHelp  bool
 	toasts    []toast
 	nextToast int
@@ -147,6 +153,7 @@ func NewDashboard(cfg *config.Config, instance config.Instance, client *coolify.
 		spin:        sp,
 		tree:        newTreeModel(),
 		filterInput: filter,
+		inFlight:    map[string]actionKind{},
 		loading:     true,
 	}
 }
@@ -226,7 +233,7 @@ func (m Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case spinner.TickMsg:
-		if !m.loading {
+		if !m.loading && !m.anyInFlight() {
 			return m, nil
 		}
 		var cmd tea.Cmd
@@ -248,6 +255,18 @@ func (m Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case inventoryMsg:
 		return m.handleInventory(msg)
+
+	case actionResultMsg:
+		return m.handleActionResult(msg)
+
+	case refreshSoonMsg:
+		// A follow-up refresh after an action, once Coolify has had time to
+		// process the queued work.
+		if m.loading {
+			return m, nil
+		}
+		m.loading = true
+		return m, tea.Batch(m.fetchInventory(), m.spin.Tick)
 
 	case toastExpiredMsg:
 		m.toasts = removeToast(m.toasts, msg.id)
@@ -289,9 +308,22 @@ func (m Dashboard) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleFilterKey(msg)
 	}
 
-	// ctrl+c always quits, even from the help overlay.
+	// ctrl+c always quits, even from a modal.
 	if msg.String() == "ctrl+c" {
 		return m, tea.Quit
+	}
+
+	// A pending confirmation is modal: nothing else may fire underneath it, or a
+	// stray key could act on the wrong application.
+	if m.pending != nil {
+		switch {
+		case key.Matches(msg, m.keys.ConfirmYes):
+			return m.confirmPending()
+		case key.Matches(msg, m.keys.ConfirmNo):
+			m.pending = nil
+			return m, nil
+		}
+		return m, nil
 	}
 
 	if m.showHelp {
@@ -371,6 +403,24 @@ func (m Dashboard) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.OpenBrowser):
 		return m.openInBrowser()
+
+	case key.Matches(msg, m.keys.Deploy):
+		return m.requestAction(actionDeploy)
+
+	case key.Matches(msg, m.keys.ForceDeploy):
+		return m.requestAction(actionForceDeploy)
+
+	case key.Matches(msg, m.keys.Start):
+		return m.requestAction(actionStart)
+
+	case key.Matches(msg, m.keys.Stop):
+		return m.requestAction(actionStop)
+
+	case key.Matches(msg, m.keys.Restart):
+		return m.requestAction(actionRestart)
+
+	case key.Matches(msg, m.keys.Cancel):
+		return m.requestAction(actionCancelDeploy)
 	}
 
 	if m.focus == paneSidebar {
@@ -613,6 +663,9 @@ func (m Dashboard) View() string {
 	if m.showHelp {
 		return m.viewHelpOverlay()
 	}
+	if m.pending != nil {
+		return m.viewConfirmModal()
+	}
 
 	sidebar := m.viewSidebar()
 	main := m.viewMain()
@@ -695,7 +748,7 @@ func (m Dashboard) viewSidebar() string {
 	// than the panel's content width.
 	inner := lipgloss.JoinVertical(lipgloss.Left,
 		s.PanelTitle.Render(truncatePlain(title, max(1, m.tree.width-2))),
-		m.tree.view(s, focused),
+		m.tree.view(s, focused, m.inFlight),
 	)
 	return panel.Width(m.tree.width).Height(m.tree.height + 1).Render(inner)
 }

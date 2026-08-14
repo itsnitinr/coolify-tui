@@ -154,6 +154,10 @@ prod (https://coolify.example.com)
 | `enter` | fold a server, or open an application's detail pane |
 | `space` | fold or unfold the server you're on |
 | `1`–`4`, `[`/`]` | switch detail tabs |
+| `d` | deploy the selected application |
+| `D` | deploy with the Docker layer cache disabled |
+| `s`, `x`, `r` | start, stop, restart |
+| `c` | cancel the running build |
 | `/` | filter applications by name, domain or branch |
 | `o` | open the selected application's domain in a browser |
 | `ctrl+r` | refresh now |
@@ -163,6 +167,23 @@ prod (https://coolify.example.com)
 Status glyphs: `●` running · `◍` degraded (up but failing its health check) ·
 `○` stopped · `▶` deploying. Degraded is deliberately distinct from both running
 and stopped — it's the state worth acting on.
+
+## Actions
+
+Every action asks for confirmation first, and the prompt says what will actually
+happen — a stop prompt tells you the app becomes unreachable, a force-deploy
+prompt explains the cache is disabled. Set `confirm_destructive: false` in the
+config to skip the prompts.
+
+Actions that cannot succeed are refused locally instead of being sent: starting
+an already-running app, stopping a stopped one, or cancelling a build that isn't
+running. If Coolify answers `403`, the error names the token permission you're
+missing rather than just reporting the status code.
+
+While an action is in flight the application shows `◌` and repeated keypresses
+are ignored, so a double-tap can't queue two deployments. Because Coolify
+processes lifecycle changes on a queue, the dashboard refreshes immediately and
+again a couple of seconds later, when the new status has actually settled.
 
 ## Security
 
@@ -182,7 +203,7 @@ and stopped — it's the state worth acting on.
 - [x] **Phase 1** — API client, config, `doctor`
 - [x] **Phase 2** — onboarding wizard
 - [x] **Phase 3** — dashboard shell
-- [ ] **Phase 4** — deploy and lifecycle actions
+- [x] **Phase 4** — deploy and lifecycle actions
 - [ ] **Phase 5** — deployment history and live build logs
 - [ ] **Phase 6** — container logs, environment variables, server health
 - [ ] **Phase 7** — search, help overlay, release tooling

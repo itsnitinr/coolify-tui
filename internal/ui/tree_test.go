@@ -321,7 +321,7 @@ func TestTreeViewRowsAreExactlyWidth(t *testing.T) {
 		tree.setSize(width, 20)
 		tree.rebuild(inv)
 
-		for i, line := range strings.Split(tree.view(styles, true), "\n") {
+		for i, line := range strings.Split(tree.view(styles, true, nil), "\n") {
 			if got := lipgloss.Width(line); got != width {
 				t.Errorf("width %d: row %d rendered %d cells:\n%q", width, i, got, line)
 			}
@@ -336,7 +336,7 @@ func TestTreeSelectedRowHasNoInteriorReset(t *testing.T) {
 	tree.rebuild(testInventory())
 	tree.cursor = 1 // an application row, which carries a status glyph
 
-	view := tree.view(styles, true)
+	view := tree.view(styles, true, nil)
 	selected := strings.Split(view, "\n")[1]
 
 	// A nested colour span emits its own reset, which would end the selection
@@ -352,12 +352,12 @@ func TestTreeViewEmptyStates(t *testing.T) {
 	tree := newTreeModel()
 	tree.setSize(30, 10)
 	tree.rebuild(coolify.Inventory{})
-	if !strings.Contains(tree.view(styles, true), "No applications") {
+	if !strings.Contains(tree.view(styles, true, nil), "No applications") {
 		t.Error("an empty inventory should say so")
 	}
 
 	tree.setFilter("zzz", testInventory())
-	if !strings.Contains(tree.view(styles, true), "zzz") {
+	if !strings.Contains(tree.view(styles, true, nil), "zzz") {
 		t.Error("an empty filter result should name the filter")
 	}
 }
