@@ -4,7 +4,19 @@ A terminal dashboard for [Coolify](https://coolify.io) — monitor your applicat
 across every server, check their status, trigger deployments and watch them run,
 without leaving the terminal. Think `lazydocker`, for Coolify.
 
-> **Status:** in active development, built in phases. See [Roadmap](#roadmap).
+```
+╭──────────────────────────────────╮╭─────────────────────────────────────────────────╮
+│ APPLICATIONS                     ││ 1 Details │ 2 Logs │  3 Deployments  │ 4 Env    │
+│▾ ● prod-eu-1              1○ 1◍ 3││  ▶ building  9f2c1ab  1m00s                     │
+│   ◍ api-gateway              main││  esc back to history · f unfollow · following   │
+│   ● storefront               main││                                                 │
+│   ○ worker-emails            main││  $ docker build -f Dockerfile -t store:9f2c1ab . │
+│▾ ● prod-us-1                    2││  #5 [2/6] RUN npm ci                            │
+│   ● analytics-ingest             ││  added 412 packages in 18s                      │
+│   ▶ docs-site          production││  npm warn deprecated inflight@1.0.6              │
+│▾ ✕ homelab                      0││  #9 exporting layers done                       │
+╰──────────────────────────────────╯╰─────────────────────────────────────────────────╯
+```
 
 ## Why
 
@@ -165,7 +177,8 @@ prod (https://coolify.example.com)
 | `V` | reveal every env var value |
 | `/` | filter applications by name, domain or branch |
 | `o` | open the selected application's domain in a browser |
-| `ctrl+r` | refresh now |
+| `i` | switch Coolify instance |
+| `ctrl+r` | refresh everything on screen |
 | `?` | full keybinding reference and refresh warnings |
 | `q` | quit |
 
@@ -244,18 +257,49 @@ name the permission — the rest of the dashboard keeps working.
 - [x] **Phase 4** — deploy and lifecycle actions
 - [x] **Phase 5** — deployment history and live build logs
 - [x] **Phase 6** — container logs, environment variables, server health
-- [ ] **Phase 7** — search, help overlay, release tooling
+- [x] **Phase 7** — instance switcher, release tooling, docs
+
+## Multiple instances
+
+Press `i` to switch between configured instances. Switching discards everything
+on screen — inventory, tabs, revealed env values — because it all described a
+different Coolify install, and saves your choice as the new default. If an
+instance's token comes from `token_env` and that variable isn't exported, the
+switch fails cleanly and names the variable.
 
 ## Development
 
 ```sh
-go test ./...      # unit tests, no network required
-go vet ./...
-gofmt -l .
+make check      # vet, gofmt check and the full test suite
+make test-race  # the TUI is concurrent; this is what CI runs
+make build      # ./coolify-tui with version stamped in
+make help       # list targets
 ```
 
 The Coolify client is tested against `httptest` servers replaying recorded
 response shapes, so the suite needs no live instance and no credentials.
+
+Notable invariants the tests enforce:
+
+- **The view is exactly the terminal's size.** Every screen — dashboard, modals,
+  each tab — is asserted to be exactly `height` lines with no line wider than
+  `width`, at several sizes. Overflow makes the terminal scroll and tears the
+  layout.
+- **Secrets never render.** Tests assert the API token never appears in the
+  onboarding wizard's output or in any error message, and that env var values
+  stay masked until explicitly revealed.
+- **Styled text is never sliced.** Only plain text is truncated; full lines are
+  clamped with an ANSI-aware helper. Cutting mid-escape-sequence corrupts the
+  rest of the screen.
+
+### Layout
+
+```
+main.go                 CLI: launch, login, logout, doctor, instances
+internal/config         multi-instance YAML config, 0600, token_env indirection
+internal/coolify        typed Coolify v1 API client and inventory join
+internal/ui             theme, onboarding wizard, dashboard and its tabs
+```
 
 ## Credits
 

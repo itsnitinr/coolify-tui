@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+
+      - name: Verify formatting
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      # The TUI is concurrent by nature: background fetches, poll loops and
+      # timers all deliver messages into the model.
+      - name: Test with race detector
+        if: matrix.os == 'ubuntu-latest'
+        run: go test -race ./...
+
+      - name: Build
+        run: go build ./...
+
+  tidy:
+    name: go.mod is tidy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+      - run: go mod tidy
+      - name: Check for changes
+        run: git diff --exit-code -- go.mod go.sum

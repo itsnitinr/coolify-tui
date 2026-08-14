@@ -119,6 +119,9 @@ type Dashboard struct {
 	// repeated keypresses cannot queue duplicate calls.
 	inFlight map[string]actionKind
 
+	// picker is the instance switcher overlay.
+	picker instancePicker
+
 	showHelp  bool
 	toasts    []toast
 	nextToast int
@@ -337,6 +340,10 @@ func (m Dashboard) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
+	if m.picker.open {
+		return m.handleInstancePickerKey(msg)
+	}
+
 	// A pending confirmation is modal: nothing else may fire underneath it, or a
 	// stray key could act on the wrong application.
 	if m.pending != nil {
@@ -421,6 +428,9 @@ func (m Dashboard) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.TabEnv):
 		return m.activateTab(tabEnv)
+
+	case key.Matches(msg, m.keys.Instances):
+		return m.openInstancePicker()
 
 	case key.Matches(msg, m.keys.OpenBrowser):
 		return m.openInBrowser()
@@ -769,6 +779,9 @@ func (m Dashboard) View() string {
 	}
 	if m.pending != nil {
 		return m.viewConfirmModal()
+	}
+	if m.picker.open {
+		return m.viewInstancePicker()
 	}
 
 	sidebar := m.viewSidebar()
