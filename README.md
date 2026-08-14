@@ -37,6 +37,39 @@ instance manages.
 - **Environment variables** — read-only, masked by default
 - **Server health** — reachability, usability and proxy state
 
+## Screenshots
+
+Every application on every server, with the detail pane on the selected one —
+placement, source, runtime and metadata:
+
+![The details tab, showing placement, source, runtime and metadata for the selected application](docs/screenshots/01-details.png)
+
+Deployment history: status, commit, duration, age and what triggered each build.
+
+![The deployments tab, listing finished and failed builds with commit, duration and trigger](docs/screenshots/03-deployments.png)
+
+`enter` on any of them opens its build log. Press `d` and you land here
+automatically, following the deployment you just started:
+
+![A build log streaming from Coolify, showing a rolling update completing](docs/screenshots/06-build-log.png)
+
+Actions confirm first, and the prompt says what will actually happen:
+
+![The deploy confirmation dialog, naming the application, target server and what deploying will do](docs/screenshots/05-deploy-confirm.png)
+
+Container logs, hard-wrapped so column-aligned output keeps its alignment:
+
+![The logs tab tailing a running container](docs/screenshots/02-logs.png)
+
+Environment variables are masked by default — you get the name, a dot mask and
+the value's length, which is enough to spot an empty or truncated value without
+putting a secret on screen:
+
+![The env tab, with every value replaced by a dot mask and a character count](docs/screenshots/04-env.png)
+
+> Screenshots are from a live instance, with instance and application
+> identifiers blurred.
+
 ## Install
 
 Requires Go 1.24 or newer.
