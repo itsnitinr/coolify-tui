@@ -15,6 +15,7 @@ import (
 
 	"github.com/itsnitinr/coolify-tui/internal/config"
 	"github.com/itsnitinr/coolify-tui/internal/coolify"
+	"github.com/itsnitinr/coolify-tui/internal/ui"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
@@ -24,8 +25,10 @@ const usage = `coolify-tui — a terminal dashboard for Coolify
 
 Usage:
   coolify-tui [flags]            Launch the dashboard
+  coolify-tui login              Add a Coolify instance (runs the setup wizard)
   coolify-tui doctor             Check connectivity for every configured instance
   coolify-tui instances          List configured instances
+  coolify-tui logout NAME        Remove a configured instance
 
 Flags:
   -instance NAME   Instance to open (default: active_instance from config)
@@ -86,6 +89,10 @@ func run(args []string) error {
 		return doctor(ctx)
 	case "instances":
 		return listInstances()
+	case "login":
+		return login()
+	case "logout":
+		return logout(fs.Arg(1))
 	case "":
 		return launch(ctx, *instanceName)
 	default:
@@ -93,15 +100,70 @@ func run(args []string) error {
 	}
 }
 
-// launch starts the dashboard. Wired up in phase 3.
-func launch(ctx context.Context, instanceName string) error {
+// login runs the setup wizard, either for first run or to add another instance.
+func login() error {
+	cfg, err := config.Load()
+	addingToExisting := true
+	if errors.Is(err, config.ErrNoConfig) {
+		cfg, addingToExisting = config.New(), false
+	} else if err != nil {
+		return err
+	}
+	result, err := ui.RunOnboarding(cfg, styles(cfg), addingToExisting)
+	if err != nil {
+		return err
+	}
+	if result.Cancelled {
+		return errors.New("setup cancelled")
+	}
+	if !result.Saved {
+		return errors.New("setup did not complete")
+	}
+	fmt.Printf("Saved instance %q. Run `coolify-tui` to open the dashboard.\n", result.Instance.Name)
+	return nil
+}
+
+// logout removes a configured instance.
+func logout(name string) error {
+	if name == "" {
+		return errors.New("logout needs an instance name (see `coolify-tui instances`)")
+	}
 	cfg, err := config.Load()
 	if errors.Is(err, config.ErrNoConfig) {
-		return errors.New("no configuration yet — onboarding lands in phase 2; " +
-			"until then write ~/.config/coolify-tui/config.yaml by hand (see README)")
+		return errors.New("no configuration to remove anything from")
 	}
 	if err != nil {
 		return err
+	}
+	if err := cfg.Remove(name); err != nil {
+		return err
+	}
+	if err := cfg.Save(); err != nil {
+		return err
+	}
+	fmt.Printf("Removed instance %q.\n", name)
+	fmt.Println("If its token came from your environment, unset that variable too.")
+	return nil
+}
+
+// launch starts the dashboard, onboarding first when there is no config yet.
+func launch(ctx context.Context, instanceName string) error {
+	cfg, err := config.Load()
+	if errors.Is(err, config.ErrNoConfig) {
+		// First run: onboard, then continue straight into the dashboard.
+		cfg = config.New()
+		result, err := ui.RunOnboarding(cfg, styles(cfg), false)
+		if err != nil {
+			return err
+		}
+		if !result.Saved {
+			return errors.New("setup cancelled")
+		}
+	} else if err != nil {
+		return err
+	}
+	if warn := cfg.PermissionWarning(); warn != "" {
+		fmt.Fprintln(os.Stderr, "warning: "+warn)
 	}
 	inst, err := selectInstance(cfg, instanceName)
 	if err != nil {
@@ -261,6 +323,11 @@ func selectInstance(cfg *config.Config, name string) (config.Instance, error) {
 		return config.Instance{}, errors.New("no instances configured")
 	}
 	return inst, nil
+}
+
+// styles resolves the configured theme into a style set.
+func styles(cfg *config.Config) ui.Styles {
+	return ui.NewStyles(ui.ThemeByName(cfg.Theme))
 }
 
 // newClient builds an API client for a configured instance.

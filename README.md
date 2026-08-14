@@ -61,6 +61,24 @@ go build -o coolify-tui .
 Also note your instance URL, e.g. `https://coolify.example.com` (a bare host or
 an IP with a port both work).
 
+## First run
+
+Just run it:
+
+```sh
+coolify-tui
+```
+
+With no config file, `coolify-tui` opens a setup wizard that asks for the
+instance name, URL and API token, then verifies them before saving. Verification
+reports which token permissions it found, so a token created without
+`read:sensitive` is caught immediately rather than at the first log tail.
+
+The token field is masked as you type and never rendered in plaintext.
+
+Add more instances later with `coolify-tui login`, and remove one with
+`coolify-tui logout NAME`.
+
 ## Configuration
 
 The config file lives at:
@@ -142,7 +160,7 @@ prod (https://coolify.example.com)
 ## Roadmap
 
 - [x] **Phase 1** — API client, config, `doctor`
-- [ ] **Phase 2** — onboarding wizard
+- [x] **Phase 2** — onboarding wizard
 - [ ] **Phase 3** — dashboard shell
 - [ ] **Phase 4** — deploy and lifecycle actions
 - [ ] **Phase 5** — deployment history and live build logs
