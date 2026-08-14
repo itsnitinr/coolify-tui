@@ -158,6 +158,8 @@ prod (https://coolify.example.com)
 | `D` | deploy with the Docker layer cache disabled |
 | `s`, `x`, `r` | start, stop, restart |
 | `c` | cancel the running build |
+| `enter` (Deployments tab) | open a build log |
+| `f` | follow / unfollow a running build log |
 | `/` | filter applications by name, domain or branch |
 | `o` | open the selected application's domain in a browser |
 | `ctrl+r` | refresh now |
@@ -185,6 +187,22 @@ are ignored, so a double-tap can't queue two deployments. Because Coolify
 processes lifecycle changes on a queue, the dashboard refreshes immediately and
 again a couple of seconds later, when the new status has actually settled.
 
+## Watching a deployment
+
+Press `d` and you land on the build log for the deployment you just started —
+following live, polled every two seconds. When the build settles, polling stops
+and a toast reports the result.
+
+Press `3` on any application for its deployment history: status, commit,
+duration, age and what triggered it (`api`, `webhook`, `manual`, `rollback`,
+`no-cache`). `enter` opens a build log; `esc` goes back. If a build is already
+running, opening the tab jumps straight to it.
+
+In a log, `f` toggles follow. Scrolling up turns follow off so the incoming
+output doesn't yank you back to the tail; `G` returns to the bottom and resumes.
+Build steps render as `$ command` so a long log stays skimmable, and stderr is
+coloured. Entries Coolify marks hidden are never rendered.
+
 ## Security
 
 - The config file is written `0600` in a `0700` directory, atomically.
@@ -204,7 +222,7 @@ again a couple of seconds later, when the new status has actually settled.
 - [x] **Phase 2** — onboarding wizard
 - [x] **Phase 3** — dashboard shell
 - [x] **Phase 4** — deploy and lifecycle actions
-- [ ] **Phase 5** — deployment history and live build logs
+- [x] **Phase 5** — deployment history and live build logs
 - [ ] **Phase 6** — container logs, environment variables, server health
 - [ ] **Phase 7** — search, help overlay, release tooling
 

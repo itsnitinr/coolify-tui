@@ -3,6 +3,8 @@
 package ui
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/itsnitinr/coolify-tui/internal/coolify"
@@ -237,18 +239,34 @@ func (s Styles) ServerDot(h coolify.ServerHealth) string {
 
 // DeploymentIndicator renders a deployment status with an appropriate glyph.
 func (s Styles) DeploymentIndicator(status string) string {
-	switch status {
+	return s.deploymentStyle(status).Render(plainDeploymentGlyph(status) + " " + statusOrUnknown(status))
+}
+
+// DeploymentGlyph renders just the coloured glyph for a deployment status.
+func (s Styles) DeploymentGlyph(status string) string {
+	return s.deploymentStyle(status).Render(plainDeploymentGlyph(status))
+}
+
+func (s Styles) deploymentStyle(status string) lipgloss.Style {
+	switch strings.ToLower(status) {
 	case "finished", "success":
-		return s.Success.Render("✓ " + status)
+		return s.Success
 	case "failed", "error":
-		return s.Danger.Render("✕ " + status)
+		return s.Danger
 	case "in_progress", "running":
-		return s.Info.Render("▶ " + status)
+		return s.Info
 	case "queued":
-		return s.Muted.Render("… " + status)
+		return s.Muted
 	case "cancelled_by_user", "cancelled":
-		return s.Warning.Render("⊘ " + status)
+		return s.Warning
 	default:
-		return s.Muted.Render("• " + status)
+		return s.Muted
 	}
+}
+
+func statusOrUnknown(status string) string {
+	if strings.TrimSpace(status) == "" {
+		return "unknown"
+	}
+	return status
 }

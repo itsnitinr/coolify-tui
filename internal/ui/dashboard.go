@@ -107,6 +107,9 @@ type Dashboard struct {
 	filtering   bool
 	filterInput textinput.Model
 
+	// deployments is the Deployments tab's state: history list and log viewer.
+	deployments deploymentsState
+
 	// pending holds an action awaiting confirmation; nil when no modal is open.
 	pending *pendingAction
 	// inFlight maps an application UUID to the action running against it, so
@@ -233,7 +236,7 @@ func (m Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case spinner.TickMsg:
-		if !m.loading && !m.anyInFlight() {
+		if !m.loading && !m.anyInFlight() && !m.deployments.detailBusy && m.deployments.polling == "" {
 			return m, nil
 		}
 		var cmd tea.Cmd
@@ -258,6 +261,15 @@ func (m Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case actionResultMsg:
 		return m.handleActionResult(msg)
+
+	case deploymentsMsg:
+		return m.handleDeploymentsMsg(msg)
+
+	case deploymentDetailMsg:
+		return m.handleDeploymentDetailMsg(msg)
+
+	case deploymentPollMsg:
+		return m.handleDeploymentPoll(msg)
 
 	case refreshSoonMsg:
 		// A follow-up refresh after an action, once Coolify has had time to
@@ -372,34 +384,22 @@ func (m Dashboard) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.NextTab):
-		m.tab = (m.tab + 1) % tabCount
-		m.syncMain()
-		return m, nil
+		return m.activateTab((m.tab + 1) % tabCount)
 
 	case key.Matches(msg, m.keys.PrevTab):
-		m.tab = (m.tab - 1 + tabCount) % tabCount
-		m.syncMain()
-		return m, nil
+		return m.activateTab((m.tab - 1 + tabCount) % tabCount)
 
 	case key.Matches(msg, m.keys.TabDetails):
-		m.tab = tabDetails
-		m.syncMain()
-		return m, nil
+		return m.activateTab(tabDetails)
 
 	case key.Matches(msg, m.keys.TabLogs):
-		m.tab = tabLogs
-		m.syncMain()
-		return m, nil
+		return m.activateTab(tabLogs)
 
 	case key.Matches(msg, m.keys.TabDeployments):
-		m.tab = tabDeployments
-		m.syncMain()
-		return m, nil
+		return m.activateTab(tabDeployments)
 
 	case key.Matches(msg, m.keys.TabEnv):
-		m.tab = tabEnv
-		m.syncMain()
-		return m, nil
+		return m.activateTab(tabEnv)
 
 	case key.Matches(msg, m.keys.OpenBrowser):
 		return m.openInBrowser()
@@ -447,8 +447,7 @@ func (m Dashboard) handleSidebarKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.tree.gotoBottom()
 	case key.Matches(msg, m.keys.Collapse):
 		m.tree.toggleCollapse(m.inv)
-		m.syncMain()
-		return m, nil
+		return m.refreshActiveTab()
 	case key.Matches(msg, m.keys.Select):
 		row, ok := m.tree.selected()
 		if !ok {
@@ -456,8 +455,7 @@ func (m Dashboard) handleSidebarKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if row.kind == rowServer {
 			m.tree.toggleCollapse(m.inv)
-			m.syncMain()
-			return m, nil
+			return m.refreshActiveTab()
 		}
 		// Selecting an application hands focus to its detail pane.
 		m.focus = paneMain
@@ -467,13 +465,22 @@ func (m Dashboard) handleSidebarKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.tree.cursor != before {
-		m.syncMain()
+		return m.refreshActiveTab()
 	}
 	return m, nil
 }
 
-// handleMainKey scrolls the detail pane.
+// handleMainKey routes keys inside the detail pane. Tabs with their own
+// navigation get first refusal; anything they do not claim scrolls the pane.
 func (m Dashboard) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.tab == tabDeployments {
+		model, cmd, claimed := m.handleDeploymentsKey(msg)
+		if claimed {
+			return model, cmd
+		}
+		m = model.(Dashboard)
+	}
+
 	switch {
 	case key.Matches(msg, m.keys.Escape):
 		m.focus = paneSidebar
@@ -488,6 +495,37 @@ func (m Dashboard) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.main, cmd = m.main.Update(msg)
 	return m, cmd
+}
+
+// activateTab switches tabs and loads whatever the new tab needs.
+func (m Dashboard) activateTab(t tab) (tea.Model, tea.Cmd) {
+	m.tab = t
+
+	// Tabs with their own cursor need focus to be usable; leaving focus in the
+	// sidebar would make their keys silently do nothing. Details is read-only, so
+	// it leaves focus where it was.
+	if t == tabDeployments {
+		if _, ok := m.tree.selectedApp(); ok {
+			m.focus = paneMain
+		}
+	}
+	return m.refreshActiveTab()
+}
+
+// refreshActiveTab re-renders the detail pane and starts any fetch the active
+// tab needs for the current selection.
+func (m Dashboard) refreshActiveTab() (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	if m.tab == tabDeployments {
+		cmd = m.ensureDeployments()
+	}
+	m.syncMain()
+	return m, cmd
+}
+
+// matches is a shorthand for key.Matches against a single binding.
+func matches(msg tea.KeyMsg, binding key.Binding) bool {
+	return key.Matches(msg, binding)
 }
 
 // handleFilterKey drives the filter prompt.
@@ -602,20 +640,22 @@ func (m *Dashboard) syncMain() {
 		content = m.renderPlaceholder(
 			m.tab.title(),
 			"Select an application to see its "+strings.ToLower(m.tab.title())+".")
+	case m.tab == tabDeployments && m.deployments.showingLogs():
+		content = m.renderDeploymentLogs(width)
+	case m.tab == tabDeployments:
+		content = m.renderDeploymentsList(row.app, width)
 	case m.tab == tabLogs:
 		content = m.renderPlaceholder("Container logs",
 			"Live log streaming arrives in phase 6.")
-	case m.tab == tabDeployments:
-		content = m.renderPlaceholder("Deployments",
-			"Deployment history and build logs arrive in phase 5.")
 	case m.tab == tabEnv:
 		content = m.renderPlaceholder("Environment variables",
 			"The masked env-var viewer arrives in phase 6.")
 	}
 
-	atBottom := m.main.AtBottom()
 	m.main.SetContent(content)
-	if atBottom && m.tab == tabLogs {
+	// Follow mode pins the view to the newest output; otherwise the scroll
+	// position is left where the user put it.
+	if m.tab == tabDeployments && m.deployments.showingLogs() && m.deployments.follow {
 		m.main.GotoBottom()
 	}
 }

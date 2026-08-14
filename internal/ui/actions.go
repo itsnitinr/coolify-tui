@@ -271,6 +271,14 @@ func (m Dashboard) handleActionResult(msg actionResultMsg) (tea.Model, tea.Cmd) 
 		m.loading = true
 		cmds = append(cmds, m.fetchInventory(), m.spin.Tick)
 	}
+
+	// An action that produced a deployment is one the user wants to watch, so
+	// open the Deployments tab on it rather than making them find it.
+	if msg.result.DeploymentUUID != "" {
+		m.tab = tabDeployments
+		cmds = append(cmds, m.reloadDeployments(msg.appUUID))
+	}
+
 	return m, tea.Batch(cmds...)
 }
 
