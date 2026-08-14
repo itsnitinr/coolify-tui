@@ -1,0 +1,23 @@
+# Build artifacts
+/coolify-tui
+/dist/
+*.exe
+
+# Go
+*.test
+*.out
+coverage.txt
+
+# Never commit real credentials or captured API responses
+config.yaml
+config.yml
+*.token
+.env
+.env.*
+/testdata/live/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
