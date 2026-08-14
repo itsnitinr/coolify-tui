@@ -286,8 +286,11 @@ func TestWizardProbeSuccessSavesConfig(t *testing.T) {
 	if loaded.ActiveInstance != "prod" {
 		t.Errorf("active instance = %q, want prod", loaded.ActiveInstance)
 	}
-	if warn := loaded.PermissionWarning(); warn != "" {
-		t.Errorf("saved config is over-permissive: %s", warn)
+	// Only meaningful where mode bits govern access; Windows uses ACLs.
+	if config.PermissionsEnforced() {
+		if warn := loaded.PermissionWarning(); warn != "" {
+			t.Errorf("saved config is over-permissive: %s", warn)
+		}
 	}
 	inst, ok := loaded.Instance("prod")
 	if !ok {

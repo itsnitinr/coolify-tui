@@ -43,8 +43,12 @@ func TestSaveThenLoadRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat: %v", err)
 	}
-	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Errorf("config file mode = %#o, want 0600", perm)
+	// Windows has no Unix mode bits: Chmod only toggles the read-only attribute
+	// and Stat always reports 0666, so there is nothing to assert there.
+	if PermissionsEnforced() {
+		if perm := info.Mode().Perm(); perm != 0o600 {
+			t.Errorf("config file mode = %#o, want 0600", perm)
+		}
 	}
 
 	loaded, err := Load()
@@ -101,6 +105,9 @@ func TestSaveIsAtomicAndLeavesNoTempFiles(t *testing.T) {
 }
 
 func TestPermissionWarningOnLooseMode(t *testing.T) {
+	if !PermissionsEnforced() {
+		t.Skip("file mode bits do not govern access on this platform")
+	}
 	dir := withConfigDir(t)
 	path := filepath.Join(dir, FileName)
 	body := "instances:\n  - name: prod\n    url: example.com\n    token: 1|s\n"
@@ -354,5 +361,27 @@ func TestDirHonoursXDG(t *testing.T) {
 	}
 	if want := filepath.Join("/tmp/xdg-test", AppName); dir != want {
 		t.Errorf("Dir() = %q, want %q", dir, want)
+	}
+}
+
+func TestPermissionWarningSilentWhereModeBitsAreMeaningless(t *testing.T) {
+	if PermissionsEnforced() {
+		t.Skip("mode bits are meaningful here; covered by TestPermissionWarningOnLooseMode")
+	}
+	// On Windows every file reports 0666, so an unconditional mode check would
+	// warn on every single run — and tell the user to run chmod, which does not
+	// exist there.
+	dir := withConfigDir(t)
+	path := filepath.Join(dir, FileName)
+	body := "instances:\n  - name: prod\n    url: example.com\n    token: 1|s\n"
+	if err := os.WriteFile(path, []byte(body), 0o666); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if warn := cfg.PermissionWarning(); warn != "" {
+		t.Errorf("PermissionWarning() = %q, want empty where mode bits mean nothing", warn)
 	}
 }

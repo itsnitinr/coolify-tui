@@ -248,6 +248,10 @@ name the permission — the rest of the dashboard keeps working.
   cannot be committed.
 - `insecure_skip_verify` is opt-in per instance and disables TLS verification —
   only use it for a self-signed homelab instance.
+- On Windows the mode check is skipped, because NTFS uses ACLs and `os.Chmod`
+  only toggles the read-only attribute — every file reports `0666` regardless of
+  who can read it. The config still lands under `%LocalAppData%`, whose default
+  ACL is scoped to your user account.
 
 ## Roadmap
 

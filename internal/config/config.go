@@ -127,7 +127,7 @@ func LoadFrom(path string) (*Config, error) {
 		return nil, fmt.Errorf("config: parse %s: %w", path, err)
 	}
 	cfg.path = path
-	if mode := info.Mode().Perm(); mode&0o077 != 0 {
+	if mode := info.Mode().Perm(); modeIsLoose(mode) {
 		cfg.looseMode = mode
 	}
 	cfg.applyDefaults()
@@ -165,9 +165,14 @@ func (c *Config) Path() string {
 	return FileName
 }
 
+// PermissionsEnforced reports whether this platform's file mode bits actually
+// govern access, and so whether PermissionWarning can say anything meaningful.
+// It is false on Windows, where ACLs do the work instead.
+func PermissionsEnforced() bool { return permissionsEnforced }
+
 // PermissionWarning describes over-permissive file modes, or "" when the file
 // is correctly locked down. The TUI surfaces this so a world-readable token
-// does not go unnoticed.
+// does not go unnoticed. It is always "" where PermissionsEnforced is false.
 func (c *Config) PermissionWarning() string {
 	if c.looseMode == 0 {
 		return ""
