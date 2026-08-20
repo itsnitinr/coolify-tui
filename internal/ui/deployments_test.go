@@ -295,7 +295,7 @@ func TestDeploymentLogsRenderCommandsAndStderr(t *testing.T) {
 		map[string]any{"command": "npm ci", "type": "stdout"},
 		map[string]any{"output": "added 412 packages", "type": "stdout"},
 		map[string]any{"output": "npm warn deprecated", "type": "stderr"},
-		map[string]any{"output": "SECRET_TOKEN=hidden", "type": "stdout", "hidden": true},
+		map[string]any{"output": "docker inspect coolify-web", "type": "stdout", "hidden": true},
 	)
 	dep := deploymentFixture("finished", 5, logs)
 	uuid := dep["deployment_uuid"].(string)
@@ -321,9 +321,45 @@ func TestDeploymentLogsRenderCommandsAndStderr(t *testing.T) {
 	if !strings.Contains(view, "npm warn deprecated") {
 		t.Error("stderr output should be shown")
 	}
-	// Coolify marks entries it does not want surfaced; honour that.
-	if strings.Contains(view, "SECRET_TOKEN") {
-		t.Error("hidden log entries must not be rendered")
+	// Entries Coolify marks hidden are its debug lines, shown by default.
+	if !strings.Contains(view, "docker inspect coolify-web") {
+		t.Errorf("debug log entries should be shown by default:\n%s", view)
+	}
+}
+
+func TestDeploymentLogsDebugToggle(t *testing.T) {
+	logs := buildLogs(
+		map[string]any{"output": "added 412 packages", "type": "stdout"},
+		map[string]any{"output": "docker inspect coolify-web", "type": "stdout", "hidden": true},
+	)
+	dep := deploymentFixture("finished", 5, logs)
+	uuid := dep["deployment_uuid"].(string)
+	rec := deploymentsServer(t, []map[string]any{dep}, map[string]map[string]any{uuid: dep})
+
+	m := newActionDashboard(t, rec, "web")
+	m = openDeploymentsTab(t, m)
+	model, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = applyCmd(t, model.(Dashboard), cmd)
+
+	if m.deployments.hideDebug {
+		t.Fatal("debug lines should start shown")
+	}
+	if !strings.Contains(m.View(), "hide debug") {
+		t.Error("the hint should offer to hide the debug lines")
+	}
+
+	m = pressDash(t, m, ".")
+	view := m.View()
+	if strings.Contains(view, "docker inspect coolify-web") {
+		t.Errorf(". should hide the debug lines:\n%s", view)
+	}
+	if !strings.Contains(view, "added 412 packages") {
+		t.Error("hiding debug lines must not hide the build's own output")
+	}
+
+	m = pressDash(t, m, ".")
+	if !strings.Contains(m.View(), "docker inspect coolify-web") {
+		t.Error(". should bring the debug lines back")
 	}
 }
 

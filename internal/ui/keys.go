@@ -40,6 +40,7 @@ type KeyMap struct {
 	Refresh     key.Binding
 	Follow      key.Binding
 	Timestamps  key.Binding
+	Debug       key.Binding
 	Reveal      key.Binding
 	RevealAll   key.Binding
 	OpenBrowser key.Binding
@@ -172,6 +173,12 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("t"),
 			key.WithHelp("t", "timestamps"),
 		),
+		// "." follows the file-manager convention for toggling hidden entries,
+		// and the letter keys a build log would want are already actions.
+		Debug: key.NewBinding(
+			key.WithKeys("."),
+			key.WithHelp(".", "debug lines"),
+		),
 		Reveal: key.NewBinding(
 			key.WithKeys("v"),
 			key.WithHelp("v", "reveal value"),
@@ -232,7 +239,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		{k.NextPane, k.PrevPane, k.FocusSidebar, k.FocusMain, k.Select, k.Collapse},
 		{k.TabDetails, k.TabLogs, k.TabDeployments, k.TabEnv, k.PrevTab, k.NextTab},
 		{k.Deploy, k.ForceDeploy, k.Start, k.Stop, k.Restart, k.Cancel},
-		{k.Follow, k.Timestamps, k.Reveal, k.RevealAll, k.OpenBrowser, k.Refresh},
+		{k.Follow, k.Timestamps, k.Debug, k.Reveal, k.RevealAll, k.OpenBrowser, k.Refresh},
 		{k.Filter, k.Instances, k.Help, k.Escape, k.Quit},
 	}
 }

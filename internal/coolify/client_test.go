@@ -334,14 +334,20 @@ func TestParseDeploymentLogs(t *testing.T) {
 		`{"output":"secret","type":"stdout","hidden":true},` +
 		`{"output":"oops","type":"stderr","hidden":false}]`
 	lines := ParseDeploymentLogs(raw)
-	if len(lines) != 2 {
-		t.Fatalf("got %d lines, want 2 (hidden entries dropped)", len(lines))
+	if len(lines) != 3 {
+		t.Fatalf("got %d lines, want 3 (hidden entries kept for the viewer)", len(lines))
 	}
 	if lines[0].Output != "visible" {
 		t.Errorf("lines[0].Output = %q", lines[0].Output)
 	}
-	if !lines[1].Stderr() {
-		t.Error("lines[1].Stderr() = false, want true")
+	if lines[0].Debug() {
+		t.Error("lines[0].Debug() = true for a visible entry")
+	}
+	if !lines[1].Debug() {
+		t.Error("lines[1].Debug() = false, want true for a hidden entry")
+	}
+	if !lines[2].Stderr() {
+		t.Error("lines[2].Stderr() = false, want true")
 	}
 
 	plain := ParseDeploymentLogs("line one\nline two")

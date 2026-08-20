@@ -56,6 +56,10 @@ type deploymentsState struct {
 
 	// follow keeps the log view pinned to the newest output.
 	follow bool
+	// hideDebug drops the entries Coolify marks hidden. Stored inverted so the
+	// zero value shows them: debug output is on until the user turns it off, and
+	// the state is rebuilt from zero whenever the selection moves.
+	hideDebug bool
 	// polling guards against two poll loops running for one deployment.
 	polling string
 }
@@ -269,6 +273,14 @@ func (m Dashboard) handleDeploymentsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, boo
 				m.main.GotoBottom()
 			}
 			return m, nil, true
+		case matches(msg, keys.Debug):
+			m.deployments.hideDebug = !m.deployments.hideDebug
+			// The log body changes length, so a followed view has to re-pin.
+			m.syncMain()
+			if m.deployments.follow {
+				m.main.GotoBottom()
+			}
+			return m, nil, true
 		case matches(msg, keys.Bottom):
 			m.deployments.follow = true
 			m.syncMain()
@@ -423,6 +435,11 @@ func (m Dashboard) renderDeploymentLogs(width int) string {
 	if state.follow {
 		hint = "esc back to history · f unfollow · following"
 	}
+	if state.hideDebug {
+		hint += " · . debug"
+	} else {
+		hint += " · . hide debug"
+	}
 	header = append(header, "  "+s.Faint.Render(hint), "")
 
 	if state.detailErr != nil {
@@ -438,6 +455,16 @@ func (m Dashboard) renderDeploymentLogs(width int) string {
 	}
 
 	lines := coolify.ParseDeploymentLogs(dep.Logs)
+	if state.hideDebug {
+		kept := make([]coolify.LogLine, 0, len(lines))
+		for _, line := range lines {
+			if line.Debug() {
+				continue
+			}
+			kept = append(kept, line)
+		}
+		lines = kept
+	}
 	if len(lines) == 0 {
 		note := "No output yet."
 		if dep.InProgress() {
@@ -464,7 +491,11 @@ func (m Dashboard) renderLogLine(line coolify.LogLine, width int) string {
 	// A command entry is the build step being run; showing it as a shell prompt
 	// makes the log skimmable.
 	if line.Command != "" {
-		return indent(s.Accent.Render(hardWrap("$ "+line.Command, avail)), "  ")
+		style := s.Accent
+		if line.Debug() {
+			style = s.Faint
+		}
+		return indent(style.Render(hardWrap("$ "+line.Command, avail)), "  ")
 	}
 
 	text := strings.TrimRight(line.Output, "\r\n")
@@ -472,8 +503,13 @@ func (m Dashboard) renderLogLine(line coolify.LogLine, width int) string {
 		return ""
 	}
 	style := s.Value
-	if line.Stderr() {
+	switch {
+	case line.Stderr():
 		style = s.Danger
+	case line.Debug():
+		// Debug output is the build's plumbing, so it is dimmed to keep it from
+		// competing with the output the user opened the log for.
+		style = s.Faint
 	}
 	// hardWrap preserves build output's own alignment, which docker and npm rely
 	// on for their progress and table output.

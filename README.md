@@ -206,6 +206,7 @@ prod (https://coolify.example.com)
 | `enter` (Deployments tab) | open a build log |
 | `f` | follow / unfollow a live log |
 | `t` | toggle log timestamps |
+| `.` | show / hide a build log's debug lines |
 | `v` | reveal the selected env var's value |
 | `V` | reveal every env var value |
 | `/` | filter applications by name, domain or branch |
@@ -250,7 +251,13 @@ running, opening the tab jumps straight to it.
 In a log, `f` toggles follow. Scrolling up turns follow off so the incoming
 output doesn't yank you back to the tail; `G` returns to the bottom and resumes.
 Build steps render as `$ command` so a long log stays skimmable, and stderr is
-coloured. Entries Coolify marks hidden are never rendered.
+coloured.
+
+The entries Coolify marks hidden — what its own UI shows only with debug turned
+on — are included, dimmed so they don't compete with the build's own output.
+Press `.` to hide them for a cleaner log. They're the plumbing around each build
+step, so they can carry environment values that the rest of the dashboard keeps
+masked.
 
 ## Logs and environment variables
 

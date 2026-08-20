@@ -185,9 +185,16 @@ type LogLine struct {
 // Stderr reports whether the line was written to standard error.
 func (l LogLine) Stderr() bool { return l.Type == "stderr" }
 
+// Debug reports whether Coolify marked the line hidden. Those are the entries
+// its own UI only shows with debug turned on: the plumbing around a build step
+// rather than the step's own output.
+func (l LogLine) Debug() bool { return l.Hidden }
+
 // ParseDeploymentLogs decodes the deployment log payload. Coolify stores it as
 // a JSON-encoded array of entries, but older instances and cancelled builds can
 // return plain text, so fall back to splitting lines.
+//
+// Hidden entries are kept, so the log viewer can decide whether to show them.
 func ParseDeploymentLogs(raw string) []LogLine {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -196,14 +203,7 @@ func ParseDeploymentLogs(raw string) []LogLine {
 	if strings.HasPrefix(raw, "[") {
 		var lines []LogLine
 		if err := json.Unmarshal([]byte(raw), &lines); err == nil {
-			out := make([]LogLine, 0, len(lines))
-			for _, l := range lines {
-				if l.Hidden {
-					continue
-				}
-				out = append(out, l)
-			}
-			return out
+			return lines
 		}
 	}
 	var out []LogLine
